@@ -253,3 +253,31 @@ def test_cors_enabled_for_127():
     resp = client.get("/health", headers={"Origin": "http://127.0.0.1:8501"})
     assert resp.status_code == 200
     assert resp.headers.get("access-control-allow-origin") == "http://127.0.0.1:8501"
+
+
+# --------------------------------------------------------------------------- #
+# Regression: API results match engine directly
+# --------------------------------------------------------------------------- #
+REGRESSION_TITLES = [
+    "Avatar", "The Dark Knight", "Interstellar", "Inception", "Titanic",
+    "Iron Man", "The Avengers", "Pulp Fiction", "The Matrix", "Shrek",
+]
+
+
+def _engine_score_tuple(title: str):
+    from model.engine import recommend_movies
+    results = recommend_movies(title=title, n=5)
+    return [(r["title"], round(r["similarity_score"], 4)) for r in results]
+
+
+def test_regression_api_matches_engine_on_10_titles():
+    """Confirm /recommend returns same movie order and scores as model/engine.py directly."""
+    for title in REGRESSION_TITLES:
+        resp = client.get("/recommend", params={"title": title, "top_n": 5})
+        assert resp.status_code == 200, title
+        api_results = resp.json()["recommendations"]
+        api_tuple = [(r["title"], r["similarity_score"]) for r in api_results]
+        engine_tuple = _engine_score_tuple(title)
+        assert api_tuple == engine_tuple, (
+            f"regression mismatch for {title!r}\n API: {api_tuple}\n engine: {engine_tuple}"
+        )
