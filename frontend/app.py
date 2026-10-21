@@ -1,8 +1,14 @@
+import os
 import random
-import re
-from difflib import get_close_matches
-
+import html
+import requests
 import streamlit as st
+from dotenv import load_dotenv
+from functools import lru_cache
+
+load_dotenv()
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+REQUEST_TIMEOUT = 10.0
 
 st.set_page_config(
     page_title="WatchNext | AI Movie Discovery",
@@ -11,129 +17,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ---------------------------------------------------------------------
-# Demo catalog. Replace this list with cleaned TMDB CSV data / your API.
-# Poster URLs are optional; cards gracefully show a placeholder on error.
-# ---------------------------------------------------------------------
-MOVIES = [
-    {
-        "title": "Interstellar", "year": 2014, "rating": 8.7,
-        "genres": ["Sci-Fi", "Drama", "Adventure"],
-        "overview": "A team of explorers travels beyond this galaxy to discover whether mankind has a future among the stars.",
-        "keywords": ["space", "time", "survival", "family", "wormhole", "science"],
-        "poster": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6Mxe7GJ2w.jpg",
-    },
-    {
-        "title": "The Martian", "year": 2015, "rating": 8.0,
-        "genres": ["Sci-Fi", "Adventure"],
-        "overview": "Stranded on Mars, an astronaut uses science and ingenuity to survive while Earth races to bring him home.",
-        "keywords": ["space", "mars", "survival", "science", "astronaut"],
-        "poster": "https://image.tmdb.org/t/p/w500/5aGhaIH3OnhX4CfewX6b9YQnLY7.jpg",
-    },
-    {
-        "title": "Inception", "year": 2010, "rating": 8.8,
-        "genres": ["Sci-Fi", "Thriller", "Action"],
-        "overview": "A skilled thief enters dreams to steal secrets, then faces an impossible task: planting an idea.",
-        "keywords": ["dreams", "mind", "time", "heist", "reality", "science"],
-        "poster": "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg",
-    },
-    {
-        "title": "Arrival", "year": 2016, "rating": 7.9,
-        "genres": ["Sci-Fi", "Drama", "Mystery"],
-        "overview": "A linguist works with the military to communicate with mysterious spacecraft that have arrived on Earth.",
-        "keywords": ["aliens", "language", "space", "time", "humanity", "science"],
-        "poster": "https://image.tmdb.org/t/p/w500/x2FJsf1ElAgr63Y3PNPtJrcmpoe.jpg",
-    },
-    {
-        "title": "Blade Runner 2049", "year": 2017, "rating": 8.0,
-        "genres": ["Sci-Fi", "Thriller", "Drama"],
-        "overview": "A young blade runner uncovers a secret that could reshape what remains of society.",
-        "keywords": ["future", "android", "identity", "humanity", "dystopia", "technology"],
-        "poster": "https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
-    },
-    {
-        "title": "Dune: Part Two", "year": 2024, "rating": 8.5,
-        "genres": ["Sci-Fi", "Adventure", "Drama"],
-        "overview": "Paul Atreides unites with Chani and the Fremen while seeking justice against those who destroyed his family.",
-        "keywords": ["desert", "destiny", "politics", "war", "epic", "future"],
-        "poster": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
-    },
-    {
-        "title": "The Dark Knight", "year": 2008, "rating": 9.0,
-        "genres": ["Action", "Crime", "Drama"],
-        "overview": "Batman faces the Joker, a criminal mastermind who plunges Gotham into chaos.",
-        "keywords": ["hero", "crime", "justice", "chaos", "city", "villain"],
-        "poster": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
-    },
-    {
-        "title": "Oppenheimer", "year": 2023, "rating": 8.3,
-        "genres": ["Drama", "History", "Thriller"],
-        "overview": "The story of J. Robert Oppenheimer and his role in the development of the atomic bomb.",
-        "keywords": ["science", "history", "war", "scientist", "politics", "biography"],
-        "poster": "https://image.tmdb.org/t/p/w500/ptpr0kGAckfQkJeJIt8st5dglvd.jpg",
-    },
-    {
-        "title": "Everything Everywhere All at Once", "year": 2022, "rating": 7.8,
-        "genres": ["Sci-Fi", "Comedy", "Action"],
-        "overview": "An exhausted laundromat owner becomes the unlikely hero of a wild multiverse-spanning adventure.",
-        "keywords": ["multiverse", "family", "identity", "parallel worlds", "comedy", "action"],
-        "poster": "https://image.tmdb.org/t/p/w500/w3LxiVYdWWRvEVdn5RYq6jIqkb1.jpg",
-    },
-    {
-        "title": "The Shawshank Redemption", "year": 1994, "rating": 9.3,
-        "genres": ["Drama", "Crime"],
-        "overview": "Two imprisoned men build a lasting friendship and find hope through years of hardship.",
-        "keywords": ["friendship", "hope", "prison", "freedom", "justice"],
-        "poster": "https://image.tmdb.org/t/p/w500/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg",
-    },
-    {
-        "title": "Spider-Man: Across the Spider-Verse", "year": 2023, "rating": 8.6,
-        "genres": ["Animation", "Action", "Adventure"],
-        "overview": "Miles Morales travels across the multiverse and meets a team of Spider-People protecting its existence.",
-        "keywords": ["multiverse", "hero", "parallel worlds", "family", "action"],
-        "poster": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
-    },
-    {
-        "title": "The Grand Budapest Hotel", "year": 2014, "rating": 8.1,
-        "genres": ["Comedy", "Drama", "Adventure"],
-        "overview": "A legendary concierge and his young protégé become tangled in a theft and a family inheritance battle.",
-        "keywords": ["friendship", "mystery", "hotel", "comedy", "adventure"],
-        "poster": "https://image.tmdb.org/t/p/w500/eWdyYQreja6JGCzqHWXpWHDrrPo.jpg",
-    },
-    {
-        "title": "The Conjuring", "year": 2013, "rating": 7.5,
-        "genres": ["Horror", "Mystery", "Thriller"],
-        "overview": "Paranormal investigators help a family terrorized by a dark presence in their farmhouse.",
-        "keywords": ["haunted", "ghost", "family", "mystery", "supernatural"],
-        "poster": "https://image.tmdb.org/t/p/w500/wVYREutTvI2tmxr6ujrHT704wGF.jpg",
-    },
-    {
-        "title": "La La Land", "year": 2016, "rating": 8.0,
-        "genres": ["Romance", "Drama", "Music"],
-        "overview": "A jazz musician and an aspiring actress fall in love while pursuing their dreams in Los Angeles.",
-        "keywords": ["love", "dreams", "music", "ambition", "romance"],
-        "poster": "https://image.tmdb.org/t/p/w500/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg",
-    },
-    {
-        "title": "Mad Max: Fury Road", "year": 2015, "rating": 8.1,
-        "genres": ["Action", "Adventure", "Sci-Fi"],
-        "overview": "In a brutal wasteland, a drifter joins a rebel warrior in a high-speed escape from a tyrant.",
-        "keywords": ["survival", "future", "chase", "desert", "action", "dystopia"],
-        "poster": "https://image.tmdb.org/t/p/w500/8tZYtuWezp8JbcsvHYO0O46tFbo.jpg",
-    },
-    {
-        "title": "Coco", "year": 2017, "rating": 8.4,
-        "genres": ["Animation", "Family", "Fantasy"],
-        "overview": "A young musician journeys to the Land of the Dead to uncover his family's history.",
-        "keywords": ["family", "music", "memory", "adventure", "fantasy"],
-        "poster": "https://image.tmdb.org/t/p/w500/gGEsBPAijhVUFoiNpgZXqRVWJt2.jpg",
-    },
+# ─── Static genre list matching the TMDB 5000 dataset ───
+GENRES = [
+    "All genres",
+    "Action", "Adventure", "Animation", "Comedy", "Crime",
+    "Documentary", "Drama", "Family", "Fantasy", "Foreign",
+    "History", "Horror", "Music", "Mystery", "Romance",
+    "Science Fiction", "TV Movie", "Thriller", "War", "Western",
 ]
 
-GENRES = sorted({g for movie in MOVIES for g in movie["genres"]})
-YEARS = sorted({movie["year"] for movie in MOVIES}, reverse=True)
+# ─── Seed words for "Surprise Me" ───
+SURPRISE_SEEDS = ["the", "star", "love", "man", "war", "night", "city", "dark"]
 
-# Custom CSS: responsive cards, purple neon highlights, cinematic background.
+# ─── Custom CSS (unchanged visual design) ───
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -200,95 +96,88 @@ footer { visibility:hidden; }
 """, unsafe_allow_html=True)
 
 
-def normalize(text):
-    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
-
-
-def recommendation_score(source, candidate):
-    source_genres = set(source["genres"])
-    candidate_genres = set(candidate["genres"])
-    genre_overlap = len(source_genres & candidate_genres)
-    source_keywords = set(source["keywords"])
-    candidate_keywords = set(candidate["keywords"])
-    keyword_overlap = len(source_keywords & candidate_keywords)
-    # Lightweight baseline heuristic for the demo; replace with TF-IDF cosine similarity.
-    return genre_overlap * 3 + keyword_overlap * 1.2 + candidate["rating"] * 0.12
-
-
-def explain_recommendation(source, candidate):
-    shared_genres = [g for g in source["genres"] if g in candidate["genres"]]
-    shared_keywords = [k for k in source["keywords"] if k in candidate["keywords"]]
-    reasons = []
-    if shared_genres:
-        reasons.append("shared genres: " + ", ".join(shared_genres[:3]))
-    if shared_keywords:
-        reasons.append("similar themes: " + ", ".join(shared_keywords[:3]))
-    if not reasons:
-        reasons.append("similar audience rating and broad storytelling profile")
-    return "Recommended because it shares " + " and ".join(reasons) + " with " + source["title"] + "."
-
-
-def find_movie(title):
-    cleaned = normalize(title)
-    if not cleaned:
-        return None, "Please enter or select a movie first."
-    for movie in MOVIES:
-        if normalize(movie["title"]) == cleaned:
-            return movie, None
-    titles = {normalize(m["title"]): m for m in MOVIES}
-    close = get_close_matches(cleaned, titles.keys(), n=1, cutoff=0.66)
-    if close:
-        return None, f"We couldn't find “{title}”. Did you mean **{titles[close[0]]['title']}**?"
-    return None, f"“{title}” isn't in this demo catalog. Try a title such as Interstellar, Inception, Dune: Part Two, or The Martian."
-
-
-def get_recommendations(source, genre_filter, year_range):
-    ranked = []
-    for candidate in MOVIES:
-        if candidate["title"] == source["title"]:
-            continue
-        if genre_filter != "All genres" and genre_filter not in candidate["genres"]:
-            continue
-        if not (year_range[0] <= candidate["year"] <= year_range[1]):
-            continue
-        score = recommendation_score(source, candidate)
-        ranked.append((score, candidate))
-    ranked.sort(key=lambda item: (item[0], item[1]["rating"]), reverse=True)
-    results = []
-    for score, movie in ranked:
-        item = dict(movie)
-        item["why"] = explain_recommendation(source, movie)
-        item["match"] = min(99, max(65, round(65 + score * 2.2)))
-        results.append(item)
-    return results[:5]
-
-
-def render_movie_card(movie, index):
-    st.markdown('<div class="movie-card">', unsafe_allow_html=True)
+# ─── API helpers ───
+def _api_get(endpoint: str, params: dict) -> dict:
+    """Call backend API with timeout and friendly error handling."""
+    url = f"{BACKEND_URL}{endpoint}"
     try:
-        st.image(movie["poster"], use_container_width=True)
-    except Exception:
-        st.markdown(
-            f'<div class="poster-placeholder"><span>🎬</span><span>{movie["title"]}</span><small>Poster unavailable</small></div>',
-            unsafe_allow_html=True,
-        )
-    st.markdown('<div class="movie-info">', unsafe_allow_html=True)
-    st.markdown(f'<div class="movie-title">{movie["title"]}</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="movie-meta"><span>{movie["year"]}</span><span>★ {movie["rating"]:.1f}</span><span>#{index}</span></div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("".join(f'<span class="pill">{g}</span>' for g in movie["genres"]), unsafe_allow_html=True)
-    st.markdown(f'<div class="movie-overview">{movie["overview"]}</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="why-box"><div class="why-label">✦ Why this match</div>{movie["why"]}</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(f'<div style="margin-top:.7rem"><span class="match">{movie["match"]}% similarity (demo)</span></div>', unsafe_allow_html=True)
-    st.markdown("</div></div>", unsafe_allow_html=True)
+        resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.ConnectionError:
+        raise RuntimeError(f"Cannot reach the WatchNext API at {BACKEND_URL}. Start it with `uvicorn backend.main:app --reload`.")
+    except requests.exceptions.Timeout:
+        raise RuntimeError(f"Request to {BACKEND_URL} timed out after {REQUEST_TIMEOUT}s.")
+    except requests.exceptions.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.response.json().get("detail", {}).get("message", str(e))
+        except Exception:
+            detail = str(e)
+        raise RuntimeError(detail)
+    except ValueError:
+        raise RuntimeError(f"Invalid JSON response from {BACKEND_URL}.")
 
 
-# Header
+@st.cache_data(ttl=60, show_spinner=False)
+def search_movies_cached(query: str, limit: int = 10) -> list[dict]:
+    """Cached search for autocomplete."""
+    if not query or not query.strip():
+        return []
+    data = _api_get("/movies/search", {"q": query.strip(), "limit": limit})
+    return data.get("results", [])
+
+
+def recommend_movies_api(title: str, genre: str | None = None, year: int | None = None, top_n: int = 5) -> dict:
+    """Call /recommend endpoint."""
+    params = {"title": title.strip(), "top_n": top_n}
+    if genre and genre != "All genres":
+        params["genre"] = genre
+    if year is not None:
+        params["year"] = year
+    return _api_get("/recommend", params)
+
+
+def render_movie_card_html(movie: dict, index: int) -> str:
+    """Build a single complete HTML string for one movie card."""
+    title = html.escape(movie.get("title", ""))
+    genres = movie.get("genres", [])
+    overview = html.escape(movie.get("overview", "") or "")
+    reason = html.escape(movie.get("reason", "") or "")
+    similarity = movie.get("similarity_score")
+    poster_path = movie.get("poster_path")
+
+    # Genres as pills
+    genre_html = "".join(f'<span class="pill">{html.escape(g)}</span>' for g in genres)
+
+    # Poster
+    if poster_path and isinstance(poster_path, str) and poster_path.strip():
+        poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
+        poster_html = f'<img class="movie-poster" src="{poster_url}" alt="{title} poster" loading="lazy">'
+    else:
+        poster_html = f'<div class="poster-placeholder"><span>🎬</span><span>{title}</span><small>Poster unavailable</small></div>'
+
+    # Similarity score display
+    sim_html = ""
+    if similarity is not None:
+        sim_html = f'<div style="margin-top:.7rem"><span class="match">Similarity score {similarity:.2f}</span></div>'
+
+    return f"""
+<div class="movie-card">
+    {poster_html}
+    <div class="movie-info">
+        <div class="movie-title">{title}</div>
+        <div class="movie-meta"><span>#{index}</span></div>
+        {genre_html}
+        <div class="movie-overview">{overview}</div>
+        <div class="why-box"><div class="why-label">✦ Why this match</div>{reason}</div>
+        {sim_html}
+    </div>
+</div>
+"""
+
+
+# ─── Header ───
 st.markdown("""
 <div class="brandbar">
   <div class="brand"><span style="color:#f8f5ff;text-shadow:none">Watch</span><span class="brand-name-accent">Next</span><span class="brand-subtitle">AI MOVIE DISCOVERY</span></div>
@@ -309,24 +198,27 @@ st.markdown("""
 </section>
 """, unsafe_allow_html=True)
 
-# Search and filter controls
-st.markdown('<div class="section-head"><div><div class="eyebrow">START WITH A FAVORITE</div><h2>What did you enjoy watching?</h2><p>Search the demo catalog or choose a title from the list.</p></div></div>', unsafe_allow_html=True)
+# ─── Search and filter controls ───
+st.markdown('<div class="section-head"><div><div class="eyebrow">START WITH A FAVORITE</div><h2>What did you enjoy watching?</h2><p>Search the TMDB 5000 catalog or type a title directly.</p></div></div>', unsafe_allow_html=True)
 
-catalog_titles = [m["title"] for m in MOVIES]
 c1, c2 = st.columns([2.3, 1], gap="large")
 with c1:
     typed_title = st.text_input(
         "Movie title",
         placeholder="e.g. Interstellar",
         key="movie_search",
-        help="Enter a movie title available in the demo catalog.",
+        help="Enter a movie title. As you type, matches from the TMDB 5000 catalog will appear below.",
     )
-    selected_title = st.selectbox("Or choose a movie", ["— Choose a movie —"] + catalog_titles, index=0)
+    # Autocomplete selectbox populated from cached search
+    search_results = search_movies_cached(typed_title, limit=10) if typed_title else []
+    select_options = ["— Choose a match —"] + [f'{m["title"]} ({", ".join(m.get("genres", [])[:3])})' for m in search_results]
+    selected_label = st.selectbox("Or pick a match", select_options, index=0)
 with c2:
     st.markdown('<div class="panel"><div class="panel-title">Fine-tune your picks</div><div class="panel-subtitle">Optional filters apply to the recommended results.</div>', unsafe_allow_html=True)
-    genre_filter = st.selectbox("Genre", ["All genres"] + GENRES, index=0)
-    min_year, max_year = min(YEARS), max(YEARS)
-    year_range = st.slider("Release year", min_value=min_year, max_value=max_year, value=(min_year, max_year))
+    genre_filter = st.selectbox("Genre", GENRES, index=0)
+    # Exact year input (backend supports exact match only)
+    st.markdown('<div class="helper">Backend matches exact release year only. Leave empty for any year.</div>', unsafe_allow_html=True)
+    year_input = st.number_input("Release year (exact)", min_value=1900, max_value=2030, value=None, step=1, format="%d")
     st.markdown('</div>', unsafe_allow_html=True)
 
 b1, b2, spacer = st.columns([1.6, 1, 4])
@@ -335,57 +227,98 @@ with b1:
 with b2:
     surprise_clicked = st.button("🎲  Surprise Me", type="secondary", use_container_width=True)
 
+# ─── Session state ───
 if "results" not in st.session_state:
     st.session_state.results = None
 if "source_title" not in st.session_state:
     st.session_state.source_title = None
+if "source_movie" not in st.session_state:
+    st.session_state.source_movie = None
 
-if find_clicked or surprise_clicked:
+# ─── Action handlers ───
+def handle_find():
+    # Determine the title: typed text takes priority, then selection
+    title = ""
+    if typed_title and typed_title.strip():
+        title = typed_title.strip()
+    elif selected_label != "— Choose a match —":
+        # Extract title from "Title (Genre1, Genre2)" format
+        title = selected_label.split(" (")[0]
+    else:
+        st.warning("Please enter or select a movie first.")
+        return
+
     with st.spinner("Finding movies with similar genres and themes..."):
-        if surprise_clicked:
-            source = random.choice(MOVIES)
-            error = None
-        else:
-            title_to_find = typed_title.strip() if typed_title.strip() else (selected_title if selected_title != "— Choose a movie —" else "")
-            source, error = find_movie(title_to_find)
-
-        if error:
+        try:
+            data = recommend_movies_api(title, genre_filter if genre_filter != "All genres" else None, year_input if year_input else None, 5)
+            st.session_state.source_title = data.get("query", title)
+            st.session_state.results = data.get("recommendations", [])
+            st.session_state.source_movie = None  # we don't have the source movie details from API
+            if len(st.session_state.results) < 5 and st.session_state.results:
+                st.info(f"Only {len(st.session_state.results)} recommendations match these filters. Widen the genre filter or remove the year filter to see more results.")
+            elif not st.session_state.results:
+                st.warning("No recommendations match the current filters. Try a wider filter range.")
+        except RuntimeError as e:
             st.session_state.results = None
             st.session_state.source_title = None
-            st.warning(error)
-        else:
-            results = get_recommendations(source, genre_filter, year_range)
-            st.session_state.source_title = source
-            st.session_state.results = results
-            if len(results) < 5:
-                st.info(f"Only {len(results)} recommendations match these filters. Widen the genre or year range to see five results.")
-            elif len(results) == 0:
-                st.warning("No recommendations match the current filters. Try a wider filter range.")
+            st.error(str(e))
 
+
+def handle_surprise():
+    with st.spinner("Picking a surprise movie..."):
+        seed = random.choice(SURPRISE_SEEDS)
+        try:
+            search_data = _api_get("/movies/search", {"q": seed, "limit": 10})
+            candidates = search_data.get("results", [])
+            if not candidates:
+                st.warning("Could not find a surprise movie. Try again.")
+                return
+            pick = random.choice(candidates)
+            title = pick["title"]
+            data = recommend_movies_api(title, genre_filter if genre_filter != "All genres" else None, year_input if year_input else None, 5)
+            st.session_state.source_title = data.get("query", title)
+            st.session_state.results = data.get("recommendations", [])
+            st.session_state.source_movie = pick
+            if len(st.session_state.results) < 5 and st.session_state.results:
+                st.info(f"Only {len(st.session_state.results)} recommendations match these filters. Widen the genre filter or remove the year filter to see more results.")
+            elif not st.session_state.results:
+                st.warning("No recommendations match the current filters. Try a wider filter range.")
+        except RuntimeError as e:
+            st.session_state.results = None
+            st.session_state.source_title = None
+            st.error(str(e))
+
+
+if find_clicked:
+    handle_find()
+if surprise_clicked:
+    handle_surprise()
+
+# ─── Results display ───
 if st.session_state.results is not None and st.session_state.source_title:
-    source = st.session_state.source_title
+    source_title = st.session_state.source_title
     results = st.session_state.results
     st.markdown("---")
     st.markdown(
-        f'<div class="section-head"><div><div class="eyebrow">PERSONALIZED RESULTS</div><h2>Because you liked <span style="color:#c084fc">{source["title"]}</span></h2><p>Ranked using shared genres, keywords, and rating as a demo baseline.</p></div><div class="match">✓ Recommendation run complete</div></div>',
+        f'<div class="section-head"><div><div class="eyebrow">PERSONALIZED RESULTS</div><h2>Because you liked <span style="color:#c084fc">{html.escape(source_title)}</span></h2><p>Ranked by content-based TF-IDF cosine similarity on the TMDB 5000 dataset.</p></div><div class="match">✓ Recommendation run complete</div></div>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        f'<div class="panel" style="margin-bottom:1rem"><div class="panel-title">Why these recommendations?</div><div class="panel-subtitle" style="margin:0">We compare genre overlap and shared themes, then generate a short human-readable reason for each suggestion. Replace this baseline with TF-IDF + cosine similarity for the final AI/ML submission.</div></div>',
+        f'<div class="panel" style="margin-bottom:1rem"><div class="panel-title">Why these recommendations?</div><div class="panel-subtitle" style="margin:0">Recommendations use content-based TF-IDF + cosine similarity on genres, keywords, cast, and director. The reason highlights shared genres, keywords, and cast members.</div></div>',
         unsafe_allow_html=True,
     )
     if results:
         cols = st.columns(5 if len(results) == 5 else min(5, len(results)), gap="medium")
         for i, movie in enumerate(results):
             with cols[i % len(cols)]:
-                render_movie_card(movie, i + 1)
+                st.markdown(render_movie_card_html(movie, i + 1), unsafe_allow_html=True)
     else:
         st.warning("No recommendations are available with the selected filters. Widen the filter range and try again.")
 
 st.markdown("---")
 st.markdown("""
 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;color:#82778f;font-size:.72rem">
-  <span><strong style="color:#c9b6df">WatchNext</strong> · AI movie recommendation prototype</span>
-  <span>Demo catalog · Poster images need an internet connection · Replace sample data before final submission</span>
+  <span><strong style="color:#c9b6df">WatchNext</strong> · Content-based movie recommender (TMDB 5000, TF-IDF + cosine similarity)</span>
+  <span>Poster images from TMDB where available · Exact-year filter only · No personalization</span>
 </div>
 """, unsafe_allow_html=True)
