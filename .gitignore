@@ -1,0 +1,12 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.ipynb_checkpoints/
+.DS_Store
+data/*.csv
+model/*.pkl
+model/*.joblib
+!data/README.md
