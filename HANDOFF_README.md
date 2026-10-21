@@ -168,7 +168,33 @@ If a poster mapping file is provided, place it at `model/artifacts/poster_paths.
 
 ---
 
-## 9. Known Limitations
+## 9. Building `poster_paths.json` from local CSV (no API key)
+
+A script is provided to generate `poster_paths.json` from the Kaggle `movies_metadata.csv` file:
+
+```powershell
+# 1. Download movies_metadata.csv from https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata
+# 2. Place it at `data/movies_metadata.csv`
+# 3. Run:
+python scripts/build_poster_paths_from_csv.py
+# 4. Restart the backend to load the new file
+```
+
+The script:
+- Reads `id` and `poster_path` columns from the CSV
+- Skips malformed rows (non-integer IDs) and duplicates (keeps first non-empty poster)
+- Filters to only movie IDs present in `model/artifacts/movies.json`
+- Validates poster paths (must start with `/` and end with `.jpg`, `.jpeg`, `.png`, or `.webp`)
+- Writes `model/artifacts/poster_paths.json` with keys sorted by integer ID
+- Reports coverage statistics and a sample of movies without posters
+
+No API key is required. The resulting file is committed (no secrets).
+
+Alternatively, `scripts/build_poster_paths.py` fetches posters via the TMDB API (requires `TMDB_READ_TOKEN` or `TMDB_API_KEY` in `.env`).
+
+---
+
+## 10. Known Limitations
 1. **Title Lookup Only:** Recommendations are retrieved by matching a known title from the dataset catalog.
 2. **Posters:** `poster_path` is `null` unless an external `poster_paths.json` is supplied.
 3. **Exact Year Matching:** The `year` filter in the adapter enforces an exact release year match (`release_year == year`).

@@ -130,3 +130,17 @@ To stop: press `Ctrl+C` in the PowerShell window, or run:
 ```powershell
 Stop-Job -Id <backend_job_id>, <frontend_job_id> | Remove-Job
 ```
+
+## Optional: Real movie posters
+The backend serves `poster_path` from `model/artifacts/poster_paths.json` (mapping `movie_id` → TMDB poster path). If this file is absent, posters are placeholders.
+
+To populate it from the local Kaggle `movies_metadata.csv` (no API key needed):
+```powershell
+# 1. Download movies_metadata.csv from https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata
+# 2. Place it at `data/movies_metadata.csv`
+# 3. Run the builder:
+python scripts/build_poster_paths_from_csv.py
+# 4. Restart the backend to load the new file
+```
+
+Alternatively, with a TMDB API key (v4 bearer token in `.env` as `TMDB_READ_TOKEN`), you can use `scripts/build_poster_paths.py` (not committed).

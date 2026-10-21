@@ -112,19 +112,28 @@ def test_render_movie_card_html_builder():
     assert "Shares Action and Sci-Fi genres." in html
     assert "Similarity score 0.75" in html
     assert "#1" in html
+    # Poster URL uses w342 with srcset for w500
+    assert "https://image.tmdb.org/t/p/w342/test.jpg" in html
     assert "https://image.tmdb.org/t/p/w500/test.jpg" in html
-    assert "poster-placeholder" not in html  # Has poster
+    # New structure: poster box with layered placeholder + image
+    assert "movie-poster-box" in html
+    assert "movie-poster-img" in html
+    assert "movie-poster-placeholder" in html  # Layered placeholder + image
+    assert "🎬" in html  # Placeholder icon
 
     # Test with null poster
     movie_no_poster = {**movie, "poster_path": None}
     html_no_poster = render_movie_card_html(movie_no_poster, 2)
-    assert "poster-placeholder" in html_no_poster
-    assert "https://image.tmdb.org/t/p/w500" not in html_no_poster
+    assert "movie-poster-box" in html_no_poster
+    assert "movie-poster-placeholder" in html_no_poster
+    assert "movie-poster-img" not in html_no_poster
+    assert "https://image.tmdb.org/t/p/w342" not in html_no_poster
 
     # Test with empty string poster
     movie_empty_poster = {**movie, "poster_path": ""}
     html_empty_poster = render_movie_card_html(movie_empty_poster, 3)
-    assert "poster-placeholder" in html_empty_poster
+    assert "movie-poster-placeholder" in html_empty_poster
+    assert "movie-poster-img" not in html_empty_poster
 
     # Test escaping - HTML should be escaped in output
     movie_xss = {**movie, "title": "<script>alert(1)</script>", "overview": "<b>bold</b>"}
