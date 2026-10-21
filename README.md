@@ -112,3 +112,21 @@ Swagger docs: `http://127.0.0.1:8000/docs`
 
 ## Working separately
 Each person should work on their owned files and commit/push changes to the same Git repository. Avoid independently changing the shared contract. If any change is necessary, agree in the team chat first and update this document before changing code.
+
+## Run locally (one command)
+```powershell
+.\run_local.ps1
+```
+This script:
+1. Creates `.venv` in the repo root if missing
+2. Installs `requirements.txt`
+3. Copies `.env.example` to `.env` if missing
+4. Starts `uvicorn backend.main:app` on `http://127.0.0.1:8000`
+5. Starts `streamlit run frontend/app.py` on `http://localhost:8501`
+6. Waits for `/health` to return `model_ready: true`
+7. Prints the live URLs and keeps both servers running
+
+To stop: press `Ctrl+C` in the PowerShell window, or run:
+```powershell
+Stop-Job -Id <backend_job_id>, <frontend_job_id> | Remove-Job
+```
