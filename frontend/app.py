@@ -29,6 +29,180 @@ GENRES = [
 # ─── Seed words for "Surprise Me" ───
 SURPRISE_SEEDS = ["the", "star", "love", "man", "war", "night", "city", "dark"]
 
+# ─── Fixed navigation bar ───
+# The stylesheet MUST be wrapped in a <style> tag: Streamlit renders bare CSS
+# as paragraph text, which silently makes every rule inert.
+NAV_CSS = """
+<style>
+html { scroll-behavior: smooth; }
+body { overflow-x: hidden; }
+
+/* One fixed, translucent-blur header. z-index 900 keeps it above page content
+   but below Streamlit's own popovers (BaseWeb renders those far higher). */
+header.wn-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 64px;
+  z-index: 900;
+  background: rgba(9, 7, 17, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(205, 173, 255, 0.14);
+}
+header.wn-nav .wn-nav-inner {
+  max-width: 1420px;
+  margin: 0 auto;
+  height: 100%;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Brand is the single word "WatchNext" (accent on the trailing letters) */
+header.wn-nav .wn-brand {
+  display: flex;
+  align-items: baseline;
+  gap: .55rem;
+  text-decoration: none;
+  color: #f8f5ff;
+  min-width: 0;
+}
+header.wn-nav .wn-brand-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: linear-gradient(92deg, #f8f5ff 0%, #f8f5ff 52%, #c084fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+header.wn-nav .wn-brand-sub {
+  font-family: 'DM Sans', sans-serif;
+  font-size: .58rem;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #a99eb8;
+  white-space: nowrap;
+}
+
+header.wn-nav .wn-nav-links {
+  display: flex;
+  gap: 1rem;
+  list-style: none;
+  margin: 0 0 0 auto;
+  padding: 0;
+  min-width: 0;
+}
+header.wn-nav .wn-nav-links a {
+  color: #d9c8f5;
+  text-decoration: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: .82rem;
+  font-weight: 500;
+  padding-bottom: .15rem;
+  border-bottom: 2px solid transparent;
+  transition: color .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+header.wn-nav .wn-nav-links a:hover {
+  color: #f0e6ff;
+  border-bottom-color: #a78bfa;
+}
+header.wn-nav .wn-nav-links a:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+
+header.wn-nav .wn-nav-tag {
+  background: rgba(168, 85, 247, .12);
+  border: 1px solid rgba(192, 132, 252, .3);
+  color: #e3d6f3;
+  font-size: .68rem;
+  font-weight: 600;
+  padding: .3rem .75rem;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Page content clears the fixed bar */
+.block-container { padding-top: 88px !important; }
+html { scroll-padding-top: 80px; }
+#wn-search, #wn-results, #wn-about { scroll-margin-top: 80px; }
+
+/* Hide Streamlit's own header/toolbar so nothing overlaps the fixed nav */
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"] {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 0; min-height: 0;
+  visibility: hidden;
+  overflow: hidden;
+  z-index: 899;
+}
+
+@media (max-width: 700px) {
+  header.wn-nav { height: 56px; }
+  header.wn-nav .wn-nav-inner { gap: .6rem; padding: 0 .75rem; }
+  header.wn-nav .wn-brand-sub,
+  header.wn-nav .wn-nav-tag { display: none; }
+  header.wn-nav .wn-nav-links {
+    gap: .65rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  header.wn-nav .wn-nav-links::-webkit-scrollbar { display: none; }
+  header.wn-nav .wn-nav-links a { font-size: .76rem; }
+}
+@media (max-width: 420px) {
+  header.wn-nav .wn-nav-inner { padding: 0 .6rem; }
+  header.wn-nav .wn-brand-name { font-size: 1.02rem; }
+  header.wn-nav .wn-nav-links { gap: .55rem; }
+  header.wn-nav .wn-nav-links a { font-size: .72rem; }
+}
+</style>
+"""
+
+
+def build_nav() -> str:
+    """Return the fixed navigation bar: stylesheet + markup, served together.
+
+    CSS and HTML are emitted in a single st.markdown call so the bar can never
+    appear without the rules that position it.
+    """
+    # NOTE: build the link list as a LIST. Adjacent f-strings would be
+    # concatenated into one string and " ".join() would split it per character.
+    links = " ".join(
+        [
+            '<li><a href="#wn-search">Search</a></li>',
+            '<li><a href="#wn-results">Results</a></li>',
+            '<li><a href="#wn-about">About</a></li>',
+        ]
+    )
+    return NAV_CSS + f"""
+<header role="banner" class="wn-nav">
+  <nav class="wn-nav-inner" aria-label="Primary">
+    <a class="wn-brand" href="#wn-search" aria-label="WatchNext home">
+      <span class="wn-brand-name">WatchNext</span>
+      <span class="wn-brand-sub">AI MOVIE DISCOVERY</span>
+    </a>
+    <ul class="wn-nav-links">
+      {links}
+    </ul>
+    <div class="wn-nav-tag">Find your next favorite movie</div>
+  </nav>
+</header>
+"""
+
+
 # ─── Custom CSS - poster-first cards ───
 st.markdown("""
 <style>
@@ -66,57 +240,6 @@ h1,h2,h3 {
     color:#fff; 
 }
 a { color:#d5a8ff !important; }
-
-/* Brand bar - single word WatchNext */
-.brandbar { 
-    display:flex; 
-    align-items:center; 
-    justify-content:space-between; 
-    gap:1rem; 
-    padding:.35rem 0 1rem; 
-    border-bottom:1px solid rgba(205,173,255,.14); 
-    margin-bottom:1.3rem; 
-}
-.brand { 
-    display:flex; 
-    align-items:baseline; 
-    flex-wrap:wrap; 
-    gap:.55rem; 
-    min-width:0; 
-    font-family:'Space Grotesk',sans-serif; 
-    font-size:1.55rem; 
-    font-weight:700; 
-    letter-spacing:-.06em; 
-    line-height:1.4; 
-}
-.brand-name { color:#f8f5ff; text-shadow:none; }
-.brand-name-accent { color:#c084fc; text-shadow:0 0 20px rgba(168,85,247,.5); }
-.brand-subtitle { 
-    display:inline-block; 
-    color:#a99eb8; 
-    font-family:'DM Sans',sans-serif; 
-    font-size:.65rem; 
-    font-weight:500; 
-    letter-spacing:0; 
-    white-space:normal; 
-}
-.brand-tag { 
-    display:inline-flex; 
-    align-items:center; 
-    justify-content:center; 
-    flex-shrink:0; 
-    max-width:100%; 
-    box-sizing:border-box; 
-    font-size:.72rem; 
-    line-height:1.45; 
-    color:#e3d6f3; 
-    border:1px solid rgba(192,132,252,.3); 
-    background:rgba(168,85,247,.08); 
-    padding:.55rem .85rem; 
-    border-radius:99px; 
-    white-space:normal; 
-    text-align:center; 
-}
 
 /* Hero */
 .hero { 
@@ -593,27 +716,24 @@ def render_movie_card_html(movie: dict, index: int) -> str:
     if extra_count > 0:
         genre_html += f'<span class="pill">+{extra_count}</span>'
 
-    # Poster box with layered placeholder + image
-    if poster_path and isinstance(poster_path, str) and poster_path.strip():
-        p = poster_path.strip()
-        # Ensure it starts with /
-        if not p.startswith("/"):
-            p = "/" + p
-        poster_w342 = f"https://image.tmdb.org/t/p/w342{p}"
-        poster_w500 = f"https://image.tmdb.org/t/p/w500{p}"
+    # Poster box with layered placeholder + image.
+    # The <img> is absolutely positioned ON TOP of the placeholder layer and
+    # starts at opacity 0; the onload handler fades it in. If the image fails
+    # to load, onload never fires, so the placeholder stays visible - no
+    # onerror handler is needed (and none is used).
+    if isinstance(poster_path, str) and poster_path.startswith("/"):
+        poster_url = f"https://image.tmdb.org/t/p/w342{poster_path}"
         poster_box = f"""
 <div class="movie-poster-box">
     <div class="movie-poster-placeholder">
         <span class="icon">🎬</span>
         <span class="title">{title}</span>
     </div>
-    <img class="movie-poster-img" 
-         src="{poster_w342}" 
-         srcset="{poster_w342} 1x, {poster_w500} 2x"
-         alt="" 
+    <img class="movie-poster-img"
+         src="{html.escape(poster_url, quote=True)}"
+         alt="{title}"
          loading="lazy"
-         onload="this.classList.add('loaded'); this.previousElementSibling.style.display='none';"
-         onerror="this.style.display='none'; this.previousElementSibling.style.display='flex';">
+         onload="this.classList.add('loaded');">
 </div>"""
     else:
         poster_box = f"""
@@ -649,16 +769,8 @@ def render_movie_card_html(movie: dict, index: int) -> str:
 """
 
 
-# ─── Header ───
-st.markdown("""
-<div class="brandbar">
-  <div class="brand">
-    <span class="brand-name">Watch</span><span class="brand-name-accent">Next</span>
-    <span class="brand-subtitle">AI MOVIE DISCOVERY</span>
-  </div>
-  <div class="brand-tag">✦ Find your next favorite movie</div>
-</div>
-""", unsafe_allow_html=True)
+# ─── Fixed navigation bar ───
+st.markdown(build_nav(), unsafe_allow_html=True)
 
 st.markdown("""
 <section class="hero">
@@ -674,7 +786,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─── Search and filter controls ───
-st.markdown('<div class="section-head"><div><div class="eyebrow">START WITH A FAVORITE</div><h2>What did you enjoy watching?</h2><p>Search the TMDB 5000 catalog or type a title directly.</p></div></div>', unsafe_allow_html=True)
+st.markdown('<div id="wn-search" class="section-head"><div><div class="eyebrow">START WITH A FAVORITE</div><h2>What did you enjoy watching?</h2><p>Search the TMDB 5000 catalog or type a title directly.</p></div></div>', unsafe_allow_html=True)
 
 c1, c2 = st.columns([2.3, 1], gap="large")
 with c1:
@@ -870,7 +982,7 @@ if st.session_state.results is not None and st.session_state.source_title:
     results = st.session_state.results
     st.markdown("---")
     st.markdown(
-        f'<div class="section-head"><div><div class="eyebrow">PERSONALIZED RESULTS</div><h2>Because you liked <span style="color:#c084fc">{html.escape(source_title)}</span></h2><p>Ranked by content-based TF-IDF cosine similarity on the TMDB 5000 dataset.</p></div><div class="match">✓ Recommendation run complete</div></div>',
+        f'<div id="wn-results" class="section-head"><div><div class="eyebrow">PERSONALIZED RESULTS</div><h2>Because you liked <span style="color:#c084fc">{html.escape(source_title)}</span></h2><p>Ranked by content-based TF-IDF cosine similarity on the TMDB 5000 dataset.</p></div><div class="match">✓ Recommendation run complete</div></div>',
         unsafe_allow_html=True,
     )
     
@@ -906,7 +1018,7 @@ if st.session_state.suggestions:
 
 st.markdown("---")
 st.markdown("""
-<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;color:#82778f;font-size:.72rem">
+<div id="wn-about" style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;color:#82778f;font-size:.72rem">
   <span><strong style="color:#c9b6df">WatchNext</strong> · Content-based movie recommender (TMDB 5000, TF-IDF + cosine similarity)</span>
   <span>Poster images courtesy of TMDB. This product uses TMDB data but is not endorsed or certified by TMDB. · Exact-year filter only · No personalization</span>
 </div>

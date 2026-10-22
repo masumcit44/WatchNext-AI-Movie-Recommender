@@ -112,14 +112,15 @@ def test_render_movie_card_html_builder():
     assert "Shares Action and Sci-Fi genres." in html
     assert "Similarity score 0.75" in html
     assert "#1" in html
-    # Poster URL uses w342 with srcset for w500
+    # Poster URL uses the TMDB w342 size
     assert "https://image.tmdb.org/t/p/w342/test.jpg" in html
-    assert "https://image.tmdb.org/t/p/w500/test.jpg" in html
     # New structure: poster box with layered placeholder + image
     assert "movie-poster-box" in html
     assert "movie-poster-img" in html
     assert "movie-poster-placeholder" in html  # Layered placeholder + image
-    assert "🎬" in html  # Placeholder icon
+
+    # The spec forbids an onerror handler: the placeholder layer is the fallback
+    assert "onerror" not in html.lower()
 
     # Test with null poster
     movie_no_poster = {**movie, "poster_path": None}
@@ -134,6 +135,12 @@ def test_render_movie_card_html_builder():
     html_empty_poster = render_movie_card_html(movie_empty_poster, 3)
     assert "movie-poster-placeholder" in html_empty_poster
     assert "movie-poster-img" not in html_empty_poster
+
+    # A poster_path without a leading "/" is not a valid TMDB path
+    movie_bad_poster = {**movie, "poster_path": "test.jpg"}
+    html_bad_poster = render_movie_card_html(movie_bad_poster, 4)
+    assert "image.tmdb.org" not in html_bad_poster
+    assert "movie-poster-placeholder" in html_bad_poster
 
     # Test escaping - HTML should be escaped in output
     movie_xss = {**movie, "title": "<script>alert(1)</script>", "overview": "<b>bold</b>"}
