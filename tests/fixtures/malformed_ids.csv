@@ -1,0 +1,6 @@
+id,poster_path
+1,/valid1.jpg
+not-an-int,/valid2.jpg
+2.5,/valid3.jpg
+,/valid4.jpg
+3,/valid5.jpg
