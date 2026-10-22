@@ -113,6 +113,43 @@ Swagger docs: `http://127.0.0.1:8000/docs`
 ## Working separately
 Each person should work on their owned files and commit/push changes to the same Git repository. Avoid independently changing the shared contract. If any change is necessary, agree in the team chat first and update this document before changing code.
 
+## Optional: Real movie posters
+The backend serves `poster_path` from `model/artifacts/poster_paths.json` (mapping `movie_id` → TMDB poster path). If this file is absent, posters are placeholders.
+
+To populate it from the local Kaggle `movies_metadata.csv` (no API key needed):
+```powershell
+# 1. Download movies_metadata.csv from https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata
+# 2. Place it at `data/movies_metadata.csv`
+# 3. Run the builder:
+python scripts/build_poster_paths_from_csv.py
+# 4. Restart the backend to load the new file
+```
+
+The builder is standard-library only. It exits with code `2` and prints download
+instructions if `data/movies_metadata.csv` is missing.
+
+Alternatively, with a TMDB API key (v4 bearer token in `.env` as `TMDB_READ_TOKEN`), you can use `scripts/build_poster_paths.py` (not committed).
+
+---
+
+## Frontend notes
+* The Streamlit UI talks to the backend **over HTTP only** — it never imports `model/`.
+* **Fixed navigation bar**: one `position: fixed` header with a translucent-blur
+  background, `z-index: 900` (above page content, below Streamlit's own popovers).
+  Streamlit's own header is hidden and the page container is padded so content
+  never slides under the bar. The brand is the single word **WatchNext**.
+  Responsive at 390 px, 700 px and 1920 px.
+* **Poster-first cards**: all five results render in one CSS grid with equal-height
+  cards. Each card has a fixed 2:3 poster box with a placeholder layer and an
+  absolutely positioned `<img>` on top (no `onerror` handler — the placeholder is
+  the natural fallback). The image URL is
+  `https://image.tmdb.org/t/p/w342` + `poster_path`, used only when `poster_path`
+  is a non-empty string starting with `/`. Every API string is HTML-escaped.
+* The API returns no ratings and no release years, so the UI shows neither.
+* TMDB attribution is displayed in the footer.
+
+---
+
 ## Run locally (one command)
 ```powershell
 .\run_local.ps1
@@ -131,16 +168,18 @@ To stop: press `Ctrl+C` in the PowerShell window, or run:
 Stop-Job -Id <backend_job_id>, <frontend_job_id> | Remove-Job
 ```
 
-## Optional: Real movie posters
-The backend serves `poster_path` from `model/artifacts/poster_paths.json` (mapping `movie_id` → TMDB poster path). If this file is absent, posters are placeholders.
+### Environment variables
+`.env.example` documents every setting the app reads:
 
-To populate it from the local Kaggle `movies_metadata.csv` (no API key needed):
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `BACKEND_URL` | Base URL the frontend calls | `http://127.0.0.1:8000` |
+| `CORS_ALLOW_ORIGINS` | Comma-separated origins the backend accepts | `http://localhost:8501,http://127.0.0.1:8501` |
+
+### Running the tests
 ```powershell
-# 1. Download movies_metadata.csv from https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata
-# 2. Place it at `data/movies_metadata.csv`
-# 3. Run the builder:
-python scripts/build_poster_paths_from_csv.py
-# 4. Restart the backend to load the new file
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt -r requirements-dev.txt
+.\.venv\Scripts\python -m pytest -q
 ```
 
-Alternatively, with a TMDB API key (v4 bearer token in `.env` as `TMDB_READ_TOKEN`), you can use `scripts/build_poster_paths.py` (not committed).

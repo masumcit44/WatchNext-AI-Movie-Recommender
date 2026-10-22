@@ -25,9 +25,15 @@ WatchNext_Integration_Kit/
 │       ├── features.npz        # Compressed sparse feature matrix (25,456 features)
 │       └── movies.json         # Movie catalog metadata (4,803 titles)
 └── tests/
-    ├── __init__.py
-    ├── test_api.py             # API route and status code tests
-    └── test_recommender_contract.py # Contract validation & regression tests
+│   ├── __init__.py
+│   ├── test_api.py             # API route and status code tests
+│   ├── test_frontend.py        # Frontend unit tests (mocked requests)
+│   ├── test_navbar.py          # Fixed navigation bar structure tests
+│   ├── test_poster_cards.py    # Poster-first card rendering tests
+│   ├── test_poster_csv_script.py # CSV poster builder tests
+│   └── test_recommender_contract.py # Contract validation & regression tests
+├── scripts/
+│   └── build_poster_paths_from_csv.py # poster_paths.json builder (stdlib only)
 ```
 
 ---
@@ -200,4 +206,55 @@ Alternatively, `scripts/build_poster_paths.py` fetches posters via the TMDB API 
 3. **Exact Year Matching:** The `year` filter in the adapter enforces an exact release year match (`release_year == year`).
 4. **Duplicate Title Resolution:** If multiple movies share the exact same title in TMDB 5000, the system deterministically resolves to the entry with the highest `vote_count`.
 5. **No Personalization:** The model is content-based and metadata-driven; it does not track user history or user ratings.
+
+---
+
+## 11. Frontend integration notes
+
+The Streamlit frontend (`frontend/app.py`) consumes this backend **over HTTP only**.
+It never imports `model/` and never computes a score, poster, year or rating itself.
+
+### 11.1 Environment
+| Variable | Consumed by | Default |
+| --- | --- | --- |
+| `BACKEND_URL` | frontend | `http://127.0.0.1:8000` |
+| `CORS_ALLOW_ORIGINS` | backend | `http://localhost:8501,http://127.0.0.1:8501` |
+| `WATCHNEXT_ARTIFACT_DIR` | backend / model | `model/artifacts` |
+
+Both are documented in `.env.example`.
+
+### 11.2 Behaviour that changed for the frontend team
+* **Result rendering.** All five results are rendered in a single CSS grid
+  (`.results-grid`) with equal-height cards (`.movie-card`, `align-items: stretch`).
+* **Poster-first cards.** Each card has a fixed 2:3 `.movie-poster-box` containing a
+  `.movie-poster-placeholder` layer and an absolutely positioned `<img>`
+  (`.movie-poster-img`) on top. There is **no `onerror` handler** — the image starts
+  at `opacity: 0` and the `onload` handler fades it in, so a failed load simply
+  leaves the placeholder visible.
+* **Poster URL.** `https://image.tmdb.org/t/p/w342` + `poster_path`, and only when
+  `poster_path` is a non-empty string that starts with `/`. Any other value renders
+  the placeholder and no `<img>` at all.
+* **Escaping.** Every string coming from the API is passed through `html.escape`
+  before it is interpolated into the card HTML.
+* **No invented data.** The API returns neither ratings nor release years, so the UI
+  displays neither. Only `similarity_score` is shown, and only because the API
+  provides it.
+* **Fixed navigation bar.** One `position: fixed` header with a translucent-blur
+  background and `z-index: 900`, which is above page content but below Streamlit's
+  own popovers. Streamlit's own header is hidden and `.block-container` gets
+  `padding-top: 88px` so content never slides under the bar. The brand is the
+  single word **WatchNext**. Layout is verified at 390 px, 700 px and 1920 px.
+* **Filter semantics.** The genre dropdown defaults to `All genres` (meaning "no
+  genre filter") and the year field defaults to empty (meaning "no year filter").
+  When a title is selected from the dropdown it takes priority over the typed text.
+* **"Did you mean" suggestions.** On a `404 MOVIE_NOT_FOUND` the UI shows the
+  suggestions carried in the error detail so the user can retry in one click.
+
+### 11.3 Tests
+`tests/test_frontend.py`, `tests/test_navbar.py` and `tests/test_poster_cards.py`
+cover the contract above. Run them with:
+```powershell
+python -m pytest -q
+```
+
 
