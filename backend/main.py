@@ -123,16 +123,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="WatchNext API", version="1.0.0", lifespan=lifespan)
 install_error_handlers(app)
 
-_cors_origins = os.environ.get("WATCHNEXT_CORS_ORIGINS", "").strip()
-if _cors_origins:  # CORS off by default; opt in via comma-separated origin list
-    origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    log.info("CORS enabled for origins: %s", origins)
+# CORS: controlled by CORS_ALLOW_ORIGINS (comma-separated; default localhost:8501)
+_cors_origins = os.environ.get("CORS_ALLOW_ORIGINS", "").strip()
+if not _cors_origins:
+    _cors_origins = "http://localhost:8501,http://127.0.0.1:8501"
+origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+log.info("CORS enabled for origins: %s", origins)
 
 
 # --------------------------------------------------------------------------- #

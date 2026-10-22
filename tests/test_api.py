@@ -46,9 +46,8 @@ def test_health_ready():
     body = resp.json()
     assert body["model_ready"] is True
     assert body["status"] == "ok"
-    # CORS is off by default
-    assert "access-control-allow-origin" not in resp.headers
-
+    # CORS is enabled by default for localhost:8501
+    assert "access-control-allow-origin" not in resp.headers  # No Origin header sent
 
 
 # --------------------------------------------------------------------------- #
@@ -75,6 +74,25 @@ def test_search_respects_limit():
 def test_search_empty_query():
     resp = client.get("/movies/search", params={"q": "   "})
     assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "EMPTY_QUERY"
+
+
+def test_search_missing_query():
+    resp = client.get("/movies/search")
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "EMPTY_QUERY"
+
+
+def test_search_invalid_limit():
+    resp = client.get("/movies/search", params={"q": "Avatar", "limit": 0})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
+
+
+def test_search_invalid_limit_non_integer():
+    resp = client.get("/movies/search", params={"q": "Avatar", "limit": "abc"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
 
 
 # --------------------------------------------------------------------------- #
@@ -139,6 +157,37 @@ def test_recommend_typo_suggestions():
     assert "Avatar" in resp.json()["detail"]["message"]
 
 
+def test_recommend_invalid_year():
+    resp = client.get("/recommend", params={"title": "Avatar", "year": "abc"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "INVALID_YEAR"
+
+
+def test_recommend_invalid_top_n_zero():
+    resp = client.get("/recommend", params={"title": "Avatar", "top_n": 0})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
+
+
+def test_recommend_invalid_top_n_non_integer():
+    resp = client.get("/recommend", params={"title": "Avatar", "top_n": "abc"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
+
+
+def test_recommend_invalid_top_n_above_cap():
+    resp = client.get("/recommend", params={"title": "Avatar", "top_n": 51})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
+
+
+def test_recommend_unknown_genre():
+    resp = client.get("/recommend", params={"title": "Avatar", "genre": "Nope"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "INVALID_FILTER"
+    assert "nope" in resp.json()["detail"]["message"].lower()
+
+
 # --------------------------------------------------------------------------- #
 # Missing metadata (monkeypatched ML layer - no dataset dependency)
 # --------------------------------------------------------------------------- #
@@ -190,38 +239,17 @@ def test_integration_real_titles():
     assert "Avatar" in resp.json()["detail"]["message"]
 
 
-def test_invalid_year():
-    resp = client.get("/recommend", params={"title": "Avatar", "year": "abc"})
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "INVALID_YEAR"
+# --------------------------------------------------------------------------- #
+# CORS
+# --------------------------------------------------------------------------- #
+def test_cors_enabled_for_localhost():
+    resp = client.get("/health", headers={"Origin": "http://localhost:8501"})
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "http://localhost:8501"
+    assert resp.headers.get("access-control-allow-credentials") == "true"
 
 
-def test_invalid_top_n_zero():
-    resp = client.get("/recommend", params={"title": "Avatar", "top_n": 0})
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
-
-
-def test_invalid_top_n_non_integer():
-    resp = client.get("/recommend", params={"title": "Avatar", "top_n": "abc"})
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
-
-
-def test_invalid_top_n_above_cap():
-    resp = client.get("/recommend", params={"title": "Avatar", "top_n": 51})
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "INVALID_TOP_N"
-
-
-def test_unknown_genre():
-    resp = client.get("/recommend", params={"title": "Avatar", "genre": "Nope"})
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "INVALID_FILTER"
-    assert "nope" in resp.json()["detail"]["message"].lower()
-
-
-def test_search_missing_query():
-    resp = client.get("/movies/search")
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "EMPTY_QUERY"
+def test_cors_enabled_for_127():
+    resp = client.get("/health", headers={"Origin": "http://127.0.0.1:8501"})
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "http://127.0.0.1:8501"
